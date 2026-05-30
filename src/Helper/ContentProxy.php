@@ -28,6 +28,7 @@ class ContentProxy
         protected LoggerInterface $logger,
         protected $fetchingErrorMessage,
         protected $storeArticleHeaders = false,
+        protected ?PlainTextConverter $plainTextConverter = null,
     ) {
         $this->mimeTypes = new MimeTypes();
     }
@@ -74,6 +75,8 @@ class ContentProxy
         }
 
         $entry->setGivenUrl($url);
+
+        $this->convertPlainTextContent($content);
 
         $this->stockEntry($entry, $content);
     }
@@ -178,6 +181,32 @@ class ContentProxy
         }
 
         $entry->setTitle($path);
+    }
+
+    /**
+     * If the fetched content has a text/plain content-type, convert the plain
+     * text body to HTML using pandoc so it is stored with proper formatting.
+     */
+    private function convertPlainTextContent(array &$content): void
+    {
+        if (null === $this->plainTextConverter) {
+            return;
+        }
+
+        $contentType = $content['headers']['content-type'] ?? '';
+
+        if (!str_starts_with($contentType, 'text/plain')) {
+            return;
+        }
+
+        if (empty($content['html'])) {
+            return;
+        }
+
+        $converted = $this->plainTextConverter->convert((string) $content['html']);
+        if (null !== $converted) {
+            $content['html'] = $converted;
+        }
     }
 
     /**

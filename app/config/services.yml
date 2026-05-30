@@ -42,6 +42,7 @@ services:
             $defaultIgnoreOriginInstanceRules: '%wallabag.default_ignore_origin_instance_rules%'
             $defaultUserAgent: '%env(WALLABAG_USER_AGENT)%'
             $addonsUrl: "%addons_url%"
+            $pandocBinary: '%wallabag.pandoc_binary%'
 
     Wallabag\:
         resource: '../../src/*'

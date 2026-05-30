@@ -1,6 +1,8 @@
 parameters:
     wallabag.version: 2.7.0-dev
     wallabag.paypal_url: "https://liberapay.com/wallabag/donate"
+    wallabag.pandoc_binary_default: 'pandoc'
+    wallabag.pandoc_binary: '%env(default:wallabag.pandoc_binary_default:PANDOC_PATH)%'
     wallabag.languages:
         en: 'English'
         fr: 'Français'

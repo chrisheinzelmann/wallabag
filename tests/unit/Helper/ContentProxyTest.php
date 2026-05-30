@@ -13,6 +13,7 @@ use Symfony\Component\Validator\Validator\RecursiveValidator;
 use Wallabag\Entity\Entry;
 use Wallabag\Entity\User;
 use Wallabag\Helper\ContentProxy;
+use Wallabag\Helper\PlainTextConverter;
 use Wallabag\Helper\RuleBasedIgnoreOriginProcessor;
 use Wallabag\Helper\RuleBasedTagger;
 
@@ -1064,6 +1065,134 @@ class ContentProxyTest extends TestCase
         $this->assertSame($expected_entry_url, $entry->getUrl());
         $this->assertSame($expected_domain, $entry->getDomainName());
         $this->assertSame($expected_origin_url, $entry->getOriginUrl());
+    }
+
+    public function testWithPlainTextContentConvertsUsingPandoc(): void
+    {
+        $tagger = $this->getTaggerMock();
+        $tagger->expects($this->once())
+            ->method('tag');
+
+        $ruleBasedIgnoreOriginProcessor = $this->getRuleBasedIgnoreOriginProcessorMock();
+
+        $graby = $this->getMockBuilder(Graby::class)
+            ->onlyMethods(['fetchContent'])
+            ->disableOriginalConstructor()
+            ->getMock();
+
+        $graby->expects($this->any())
+            ->method('fetchContent')
+            ->willReturn([
+                'html' => "Hello world\n\nThis is a paragraph.",
+                'title' => 'plain text article',
+                'url' => 'http://example.com/article.txt',
+                'language' => 'en',
+                'status' => '200',
+                'headers' => [
+                    'content-type' => 'text/plain; charset=utf-8',
+                ],
+            ]);
+
+        $convertedHtml = '<p>Hello world</p><p>This is a paragraph.</p>';
+
+        $plainTextConverter = $this->getMockBuilder(PlainTextConverter::class)
+            ->onlyMethods(['convert'])
+            ->disableOriginalConstructor()
+            ->getMock();
+
+        $plainTextConverter->expects($this->once())
+            ->method('convert')
+            ->willReturn($convertedHtml);
+
+        $proxy = new ContentProxy($graby, $tagger, $ruleBasedIgnoreOriginProcessor, $this->getValidator(), $this->getLogger(), $this->fetchingErrorMessage, false, $plainTextConverter);
+        $entry = new Entry(new User());
+        $proxy->updateEntry($entry, 'http://example.com/article.txt');
+
+        $this->assertSame('http://example.com/article.txt', $entry->getUrl());
+        $this->assertSame($convertedHtml, $entry->getContent());
+        $this->assertSame('text/plain; charset=utf-8', $entry->getMimetype());
+        $this->assertFalse($entry->isNotParsed());
+    }
+
+    public function testWithPlainTextContentSkipsConversionWhenConverterReturnsNull(): void
+    {
+        $tagger = $this->getTaggerMock();
+        $tagger->expects($this->once())
+            ->method('tag');
+
+        $ruleBasedIgnoreOriginProcessor = $this->getRuleBasedIgnoreOriginProcessorMock();
+
+        $graby = $this->getMockBuilder(Graby::class)
+            ->onlyMethods(['fetchContent'])
+            ->disableOriginalConstructor()
+            ->getMock();
+
+        $rawText = 'Hello world';
+
+        $graby->expects($this->any())
+            ->method('fetchContent')
+            ->willReturn([
+                'html' => $rawText,
+                'title' => 'plain text article',
+                'url' => 'http://example.com/article.txt',
+                'language' => 'en',
+                'status' => '200',
+                'headers' => [
+                    'content-type' => 'text/plain',
+                ],
+            ]);
+
+        $plainTextConverter = $this->getMockBuilder(PlainTextConverter::class)
+            ->onlyMethods(['convert'])
+            ->disableOriginalConstructor()
+            ->getMock();
+
+        $plainTextConverter->expects($this->once())
+            ->method('convert')
+            ->willReturn(null);
+
+        $proxy = new ContentProxy($graby, $tagger, $ruleBasedIgnoreOriginProcessor, $this->getValidator(), $this->getLogger(), $this->fetchingErrorMessage, false, $plainTextConverter);
+        $entry = new Entry(new User());
+        $proxy->updateEntry($entry, 'http://example.com/article.txt');
+
+        // Original html is preserved when converter returns null
+        $this->assertSame($rawText, $entry->getContent());
+    }
+
+    public function testWithPlainTextContentSkipsConversionWhenNoConverter(): void
+    {
+        $tagger = $this->getTaggerMock();
+        $tagger->expects($this->once())
+            ->method('tag');
+
+        $ruleBasedIgnoreOriginProcessor = $this->getRuleBasedIgnoreOriginProcessorMock();
+
+        $graby = $this->getMockBuilder(Graby::class)
+            ->onlyMethods(['fetchContent'])
+            ->disableOriginalConstructor()
+            ->getMock();
+
+        $rawText = 'Hello world';
+
+        $graby->expects($this->any())
+            ->method('fetchContent')
+            ->willReturn([
+                'html' => $rawText,
+                'title' => 'plain text article',
+                'url' => 'http://example.com/article.txt',
+                'language' => 'en',
+                'status' => '200',
+                'headers' => [
+                    'content-type' => 'text/plain',
+                ],
+            ]);
+
+        // No PlainTextConverter injected
+        $proxy = new ContentProxy($graby, $tagger, $ruleBasedIgnoreOriginProcessor, $this->getValidator(), $this->getLogger(), $this->fetchingErrorMessage);
+        $entry = new Entry(new User());
+        $proxy->updateEntry($entry, 'http://example.com/article.txt');
+
+        $this->assertSame($rawText, $entry->getContent());
     }
 
     /**

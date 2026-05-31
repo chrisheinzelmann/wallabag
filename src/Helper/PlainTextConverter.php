@@ -34,29 +34,73 @@ class PlainTextConverter
             return null;
         }
 
-        if (!class_exists($processClass)) {
-            $this->logger->warning('PlainTextConverter: Symfony Process component is unavailable.');
+        if (class_exists($processClass)) {
+            $process = new $processClass([$this->pandocBinary, '-f', 'markdown', '-t', 'html']);
+            $process->setInput($plainText);
 
-            return null;
+            try {
+                $process->mustRun();
+
+                return $process->getOutput();
+            } catch (\Throwable $e) {
+                $this->logger->warning('PlainTextConverter: unexpected error during pandoc conversion.', [
+                    'pandoc_binary' => $this->pandocBinary,
+                    'error' => $e->getMessage(),
+                    'stderr' => $process->getErrorOutput(),
+                    'stdout' => $process->getOutput(),
+                    'exit_code' => $process->getExitCode(),
+                ]);
+
+                return null;
+            }
         }
 
-        $process = new $processClass([$this->pandocBinary, '-f', 'markdown', '-t', 'html']);
-        $process->setInput($plainText);
+        $this->logger->warning('PlainTextConverter: Symfony Process component is unavailable, using proc_open fallback.');
 
-        try {
-            $process->mustRun();
+        return $this->convertWithProcOpen($plainText);
+    }
 
-            return $process->getOutput();
-        } catch (\Throwable $e) {
-            $this->logger->warning('PlainTextConverter: unexpected error during pandoc conversion.', [
+    private function convertWithProcOpen(string $plainText): ?string
+    {
+        $command = escapeshellarg($this->pandocBinary) . ' -f markdown -t html';
+        $descriptors = [
+            0 => ['pipe', 'r'],
+            1 => ['pipe', 'w'],
+            2 => ['pipe', 'w'],
+        ];
+
+        $process = @proc_open($command, $descriptors, $pipes);
+
+        if (!\is_resource($process)) {
+            $this->logger->warning('PlainTextConverter: unable to start pandoc process with proc_open.', [
                 'pandoc_binary' => $this->pandocBinary,
-                'error' => $e->getMessage(),
-                'stderr' => $process->getErrorOutput(),
-                'stdout' => $process->getOutput(),
-                'exit_code' => $process->getExitCode(),
             ]);
 
             return null;
         }
+
+        fwrite($pipes[0], $plainText);
+        fclose($pipes[0]);
+
+        $stdout = stream_get_contents($pipes[1]);
+        fclose($pipes[1]);
+
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[2]);
+
+        $exitCode = proc_close($process);
+
+        if (0 !== $exitCode) {
+            $this->logger->warning('PlainTextConverter: pandoc proc_open fallback failed.', [
+                'pandoc_binary' => $this->pandocBinary,
+                'stderr' => $stderr,
+                'stdout' => $stdout,
+                'exit_code' => $exitCode,
+            ]);
+
+            return null;
+        }
+
+        return false === $stdout ? null : $stdout;
     }
 }

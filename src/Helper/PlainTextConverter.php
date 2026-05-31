@@ -49,7 +49,11 @@ class PlainTextConverter
             return $process->getOutput();
         } catch (\Throwable $e) {
             $this->logger->warning('PlainTextConverter: unexpected error during pandoc conversion.', [
+                'pandoc_binary' => $this->pandocBinary,
                 'error' => $e->getMessage(),
+                'stderr' => $process->getErrorOutput(),
+                'stdout' => $process->getOutput(),
+                'exit_code' => $process->getExitCode(),
             ]);
 
             return null;

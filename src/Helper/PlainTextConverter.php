@@ -34,6 +34,12 @@ class PlainTextConverter
             return null;
         }
 
+        if (!class_exists(Process::class)) {
+            $this->logger->warning('PlainTextConverter: Symfony Process component is unavailable.');
+
+            return null;
+        }
+
         $process = new Process([$this->pandocBinary, '-f', 'markdown', '-t', 'html']);
         $process->setInput($plainText);
 
@@ -47,7 +53,7 @@ class PlainTextConverter
             ]);
 
             return null;
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             $this->logger->warning('PlainTextConverter: unexpected error during pandoc conversion.', [
                 'error' => $e->getMessage(),
             ]);

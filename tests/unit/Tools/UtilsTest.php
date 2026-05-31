@@ -36,4 +36,11 @@ class UtilsTest extends TestCase
 
         return $examples;
     }
+
+    public function testGetReadingTimeWithInvalidUtf8Input(): void
+    {
+        $text = "hello\xA9world";
+
+        static::assertSame(0, Utils::getReadingTime($text));
+    }
 }

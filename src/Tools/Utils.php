@@ -28,6 +28,22 @@ class Utils
      */
     public static function getReadingTime($text)
     {
-        return (int) floor(\count(preg_split('~([^\p{L}\p{N}\']+|(\p{Han}|\p{Hiragana}|\p{Katakana}|\p{Hangul}){1,2})~u', strip_tags($text))) / 200);
+        $pattern = '~([^\p{L}\p{N}\']+|(\p{Han}|\p{Hiragana}|\p{Katakana}|\p{Hangul}){1,2})~u';
+        $plainText = strip_tags((string) $text);
+        $words = preg_split($pattern, $plainText);
+
+        if (false === $words) {
+            $sanitizedText = \function_exists('iconv') ? iconv('UTF-8', 'UTF-8//IGNORE', $plainText) : false;
+            if (false === $sanitizedText) {
+                return 0;
+            }
+
+            $words = preg_split($pattern, $sanitizedText);
+            if (false === $words) {
+                return 0;
+            }
+        }
+
+        return (int) floor(\count($words) / 200);
     }
 }

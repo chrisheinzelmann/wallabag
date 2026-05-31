@@ -73,4 +73,15 @@ class PlainTextConverterTest extends TestCase
         $this->assertStringContainsString('Second paragraph', $result);
         $this->assertStringContainsString('<p>', $result);
     }
+
+    public function testConvertWithInvalidUtf8Input(): void
+    {
+        $pandoc = $this->getPandocBinary();
+        $converter = new PlainTextConverter($pandoc, new NullLogger());
+
+        $result = $converter->convert("Hello\xA9 world");
+
+        $this->assertNotNull($result);
+        $this->assertStringContainsString('Hello', $result);
+    }
 }

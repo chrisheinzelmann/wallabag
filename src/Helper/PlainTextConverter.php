@@ -28,7 +28,7 @@ class PlainTextConverter
     {
         $processClass = 'Symfony\\Component\\Process\\Process';
 
-        $plainText = strip_tags($text);
+        $plainText = $this->normalizeUtf8(strip_tags($text));
 
         if ('' === trim($plainText)) {
             return null;
@@ -58,6 +58,26 @@ class PlainTextConverter
         $this->logger->warning('PlainTextConverter: Symfony Process component is unavailable, using proc_open fallback.');
 
         return $this->convertWithProcOpen($plainText);
+    }
+
+    private function normalizeUtf8(string $text): string
+    {
+        if (1 === preg_match('//u', $text)) {
+            return $text;
+        }
+
+        if (\function_exists('iconv')) {
+            $converted = iconv('UTF-8', 'UTF-8//IGNORE', $text);
+            if (false !== $converted) {
+                return $converted;
+            }
+        }
+
+        if (\function_exists('mb_convert_encoding')) {
+            return mb_convert_encoding($text, 'UTF-8', 'UTF-8, ISO-8859-1, Windows-1252');
+        }
+
+        return $text;
     }
 
     private function convertWithProcOpen(string $plainText): ?string

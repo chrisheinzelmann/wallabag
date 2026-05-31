@@ -51,9 +51,11 @@ class ContentProxy
         if ((empty($content) || false === $this->validateContent($content)) && false === $disableContentUpdate) {
             $fetchedContent = $this->graby->fetchContent($url);
 
+            $fetchedContentType = $this->getHeaderValue($fetchedContent['headers'] ?? [], 'content-type') ?? '';
+
             $fetchedContent['title'] = $this->sanitizeContentTitle(
                 $fetchedContent['title'],
-                $fetchedContent['headers']['content-type'] ?? ''
+                $fetchedContentType
             );
 
             // when content is imported, we have information in $content
@@ -190,23 +192,48 @@ class ContentProxy
     private function convertPlainTextContent(array &$content): void
     {
         if (null === $this->plainTextConverter) {
+            $this->logger->debug('Skipping plain text conversion: no converter is configured.');
+
             return;
         }
 
-        $contentType = $content['headers']['content-type'] ?? '';
+        $contentType = $this->getHeaderValue($content['headers'] ?? [], 'content-type') ?? '';
+        $normalizedContentType = strtolower(trim($contentType));
 
-        if (!str_starts_with($contentType, 'text/plain')) {
+        if (!str_starts_with($normalizedContentType, 'text/plain')) {
             return;
         }
 
         if (empty($content['html'])) {
+            $this->logger->debug('Skipping plain text conversion: empty content body.', [
+                'url' => $content['url'] ?? null,
+                'content_type' => $contentType,
+            ]);
+
             return;
         }
+
+        $this->logger->debug('Attempting plain text to HTML conversion with pandoc.', [
+            'url' => $content['url'] ?? null,
+            'content_type' => $contentType,
+        ]);
 
         $converted = $this->plainTextConverter->convert((string) $content['html']);
         if (null !== $converted) {
             $content['html'] = $converted;
+
+            $this->logger->debug('Plain text to HTML conversion succeeded.', [
+                'url' => $content['url'] ?? null,
+                'content_type' => $contentType,
+            ]);
+
+            return;
         }
+
+        $this->logger->debug('Plain text to HTML conversion skipped: converter returned null.', [
+            'url' => $content['url'] ?? null,
+            'content_type' => $contentType,
+        ]);
     }
 
     /**
@@ -318,7 +345,9 @@ class ContentProxy
         }
 
         // if content is an image, define it as a preview too
-        if (!empty($content['headers']['content-type']) && \in_array(current($this->mimeTypes->getExtensions($content['headers']['content-type'])), ['jpeg', 'jpg', 'gif', 'png'], true)) {
+        $contentType = $this->getHeaderValue($content['headers'] ?? [], 'content-type');
+
+        if (null !== $contentType && \in_array(current($this->mimeTypes->getExtensions($contentType)), ['jpeg', 'jpg', 'gif', 'png'], true)) {
             $previewPictureUrl = $content['url'];
         } elseif (empty($previewPictureUrl)) {
             $this->logger->debug('Extracting images from content to provide a default preview picture');
@@ -330,8 +359,8 @@ class ContentProxy
             }
         }
 
-        if (!empty($content['headers']['content-type'])) {
-            $entry->setMimetype($content['headers']['content-type']);
+        if (null !== $contentType) {
+            $entry->setMimetype($contentType);
         }
 
         if (!empty($previewPictureUrl)) {
@@ -429,5 +458,21 @@ class ContentProxy
     private function validateContent(array $content)
     {
         return !empty($content['title']) && !empty($content['html']) && !empty($content['url']);
+    }
+
+    /**
+     * Retrieve a header value in a case-insensitive way.
+     */
+    private function getHeaderValue(array $headers, string $name): ?string
+    {
+        foreach ($headers as $headerName => $value) {
+            if (0 !== strcasecmp((string) $headerName, $name)) {
+                continue;
+            }
+
+            return is_scalar($value) ? trim((string) $value) : null;
+        }
+
+        return null;
     }
 }

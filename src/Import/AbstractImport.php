@@ -51,6 +51,13 @@ abstract class AbstractImport implements ImportInterface
      */
     public function setUser(User $user): void
     {
+        // Always keep a managed user reference when possible.
+        if (null !== $user->getId()) {
+            $this->user = $this->em->getReference(User::class, $user->getId());
+
+            return;
+        }
+
         $this->user = $user;
     }
 
@@ -173,6 +180,12 @@ abstract class AbstractImport implements ImportInterface
                 $entryToBeFlushed = [];
 
                 $this->em->clear();
+
+                // clear() detaches all entities, including the import user.
+                // Re-attach a managed reference for subsequent imported entries.
+                if (null !== $this->user && null !== $this->user->getId()) {
+                    $this->user = $this->em->getReference(User::class, $this->user->getId());
+                }
             }
             ++$i;
         }

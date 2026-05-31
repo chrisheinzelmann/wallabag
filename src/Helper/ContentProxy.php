@@ -192,8 +192,6 @@ class ContentProxy
     private function convertPlainTextContent(array &$content): void
     {
         if (null === $this->plainTextConverter) {
-            $this->logger->debug('Skipping plain text conversion: no converter is configured.');
-
             return;
         }
 
@@ -205,35 +203,13 @@ class ContentProxy
         }
 
         if (empty($content['html'])) {
-            $this->logger->debug('Skipping plain text conversion: empty content body.', [
-                'url' => $content['url'] ?? null,
-                'content_type' => $contentType,
-            ]);
-
             return;
         }
-
-        $this->logger->debug('Attempting plain text to HTML conversion with pandoc.', [
-            'url' => $content['url'] ?? null,
-            'content_type' => $contentType,
-        ]);
 
         $converted = $this->plainTextConverter->convert((string) $content['html']);
         if (null !== $converted) {
             $content['html'] = $converted;
-
-            $this->logger->debug('Plain text to HTML conversion succeeded.', [
-                'url' => $content['url'] ?? null,
-                'content_type' => $contentType,
-            ]);
-
-            return;
         }
-
-        $this->logger->debug('Plain text to HTML conversion skipped: converter returned null.', [
-            'url' => $content['url'] ?? null,
-            'content_type' => $contentType,
-        ]);
     }
 
     /**

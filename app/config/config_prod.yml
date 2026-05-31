@@ -16,10 +16,16 @@ monolog:
             type: fingers_crossed
             action_level: error
             handler: nested
+            channels: ['!app']
         nested:
             type: stream
             path: "%kernel.logs_dir%/%kernel.environment%.log"
             level: debug
+        app_debug:
+            type: stream
+            path: "%kernel.logs_dir%/app_debug.log"
+            level: debug
+            channels: ['app']
         console:
             type: console
 

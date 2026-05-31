@@ -3,8 +3,6 @@
 namespace Wallabag\Helper;
 
 use Psr\Log\LoggerInterface;
-use Symfony\Component\Process\Exception\ProcessFailedException;
-use Symfony\Component\Process\Process;
 
 /**
  * Converts plain text content to HTML using pandoc.
@@ -28,31 +26,27 @@ class PlainTextConverter
      */
     public function convert(string $text): ?string
     {
+        $processClass = 'Symfony\\Component\\Process\\Process';
+
         $plainText = strip_tags($text);
 
         if ('' === trim($plainText)) {
             return null;
         }
 
-        if (!class_exists(Process::class)) {
+        if (!class_exists($processClass)) {
             $this->logger->warning('PlainTextConverter: Symfony Process component is unavailable.');
 
             return null;
         }
 
-        $process = new Process([$this->pandocBinary, '-f', 'markdown', '-t', 'html']);
+        $process = new $processClass([$this->pandocBinary, '-f', 'markdown', '-t', 'html']);
         $process->setInput($plainText);
 
         try {
             $process->mustRun();
 
             return $process->getOutput();
-        } catch (ProcessFailedException $e) {
-            $this->logger->warning('PlainTextConverter: pandoc process failed.', [
-                'error' => $e->getMessage(),
-            ]);
-
-            return null;
         } catch (\Throwable $e) {
             $this->logger->warning('PlainTextConverter: unexpected error during pandoc conversion.', [
                 'error' => $e->getMessage(),
